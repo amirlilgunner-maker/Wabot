@@ -99,10 +99,10 @@ client.on('message_create', async (msg) => {
     // اون شناسه خودت رو برمی‌گردونه نه شناسه چت؛ باید از msg.getChat() استفاده کرد.
     if (body === '!id') {
       try {
-        const chat = await msg.getChat();
-        await msg.reply('🆔 ID این چت:\n' + chat.id._serialized);
+        const remote = msg.id && msg.id.remote;
+        await msg.reply('🆔 ID این چت:\n' + (remote || 'پیدا نشد، دوباره امتحان کن'));
       } catch (e) {
-        await msg.reply('❌ خطا در گرفتن شناسه: ' + e.message);
+        await msg.reply('❌ خطا در گرفتن شناسه: ' + (e && e.message ? e.message : 'نامشخص'));
       }
       return;
     }
