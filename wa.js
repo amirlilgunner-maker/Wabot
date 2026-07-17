@@ -95,8 +95,15 @@ client.on('message_create', async (msg) => {
     if (!msg.fromMe) return;
 
     // نمایش ID همین چت (بدون نیاز به getChats، پایدارتره)
+    // نکته مهم: برای پیام‌های خودت (fromMe) نمی‌شه از msg.from استفاده کرد چون
+    // اون شناسه خودت رو برمی‌گردونه نه شناسه چت؛ باید از msg.getChat() استفاده کرد.
     if (body === '!id') {
-      await msg.reply('🆔 ID این چت:\n' + msg.from);
+      try {
+        const chat = await msg.getChat();
+        await msg.reply('🆔 ID این چت:\n' + chat.id._serialized);
+      } catch (e) {
+        await msg.reply('❌ خطا در گرفتن شناسه: ' + e.message);
+      }
       return;
     }
 
@@ -127,8 +134,12 @@ client.on('message_create', async (msg) => {
 
     if (body === '!send') {
       if (!targetChannelId) { await msg.reply('❌ اول کانال رو تنظیم کن:\n!setchannel ID_کانال'); return; }
-      await sendAllToChannel();
-      await msg.reply('✅ موجودی ارسال شد.');
+      const result = await sendAllToChannel();
+      if (result.ok) {
+        await msg.reply(`✅ موجودی ارسال شد. (${result.sent} ماشین)`);
+      } else {
+        await msg.reply(`❌ ارسال ناموفق بود:\n${result.error}\n\nاحتمالاً شناسه کانال (${targetChannelId}) درست نیست. داخل خود گروه/کانال !id رو بفرست و دوباره !setchannel کن.`);
+      }
       return;
     }
 
@@ -207,24 +218,30 @@ client.on('message_create', async (msg) => {
 });
 
 async function sendAllToChannel() {
-  if (!targetChannelId) return;
+  if (!targetChannelId) return { ok: false, error: 'کانال تنظیم نشده', sent: 0 };
   const cars = loadCars().filter(c => c.status === 'available');
-  if (cars.length === 0) return;
+  if (cars.length === 0) return { ok: false, error: 'هیچ ماشین موجودی در cars.json نیست', sent: 0 };
 
   try {
     await client.sendMessage(targetChannelId,
       `🚗 *موجودی خودرو*\n📅 ${new Date().toLocaleDateString('fa-IR')}\n\n${cars.length} خودرو موجود 👇`
     );
-  } catch (e) { console.error(e.message); }
+  } catch (e) {
+    console.error('خطا در ارسال هدر موجودی:', e.message);
+    return { ok: false, error: e.message, sent: 0 };
+  }
 
+  let sentCount = 0;
   for (const car of cars) {
     try {
       const text = buildCarMessage(car);
       await client.sendMessage(targetChannelId, text);
+      sentCount++;
       await new Promise(r => setTimeout(r, 2000));
-    } catch (e) { console.error(e.message); }
+    } catch (e) { console.error('خطا در ارسال یک ماشین:', e.message); }
   }
-  console.log(`[${new Date().toLocaleString('fa-IR')}] ${cars.length} ماشین در واتساپ ارسال شد.`);
+  console.log(`[${new Date().toLocaleString('fa-IR')}] ${sentCount} ماشین در واتساپ ارسال شد.`);
+  return { ok: sentCount > 0, error: sentCount === 0 ? 'هیچ ماشینی ارسال نشد' : null, sent: sentCount };
 }
 
 // --- رصد خودکار cars.json برای پست فوری ماشین‌های تازه‌اضافه‌شده ---
