@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 
 const CARS_FILE = '/root/carbot/cars.json';
+const TRIGGER_FILE = '/root/carbot/wa_trigger.json';
 const SCHEDULE_FILE = '/root/schedule.json';
 
 // جلوگیری از کرش کامل ربات به خاطر ارورهای مدیریت‌نشده (auth timeout و مشابه)
@@ -84,6 +85,7 @@ client.on('ready', async () => {
 
   // شروع رصد فایل موجودی برای پست فوری خودکار
   startWatchingCars();
+  startWatchingTelegramTrigger();
 });
 
 client.on('message_create', async (msg) => {
@@ -278,6 +280,35 @@ function startWatchingCars() {
   });
 
   console.log('👀 رصد فایل موجودی برای پست فوری فعال شد.');
+}
+
+// --- رصد فایل علامت مشترک: وقتی ربات تلگرام موجودی رو ارسال می‌کنه (دستی یا زمان‌بندی)، اینجا هم ارسال کن ---
+function startWatchingTelegramTrigger() {
+  if (!fs.existsSync(TRIGGER_FILE)) {
+    try { fs.writeFileSync(TRIGGER_FILE, JSON.stringify({ ts: Date.now() }), 'utf8'); } catch (e) { return; }
+  }
+
+  let lastTs = 0;
+  try { lastTs = JSON.parse(fs.readFileSync(TRIGGER_FILE, 'utf8')).ts || 0; } catch (e) {}
+
+  let debounceTimer = null;
+  const checkTrigger = async () => {
+    if (!autoInstant || !targetChannelId) return;
+    let ts = 0;
+    try { ts = JSON.parse(fs.readFileSync(TRIGGER_FILE, 'utf8')).ts || 0; } catch (e) { return; }
+    if (ts > lastTs) {
+      lastTs = ts;
+      console.log('📢 تلگرام موجودی رو ارسال کرد، واتساپ هم آپدیت میشه...');
+      await sendAllToChannel();
+    }
+  };
+
+  fs.watch(TRIGGER_FILE, () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(checkTrigger, 1000);
+  });
+
+  console.log('📡 رصد سیگنال تلگرام فعال شد.');
 }
 
 client.initialize();
