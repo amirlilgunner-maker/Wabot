@@ -73,6 +73,11 @@ client.on('qr', (qr) => {
   console.log('\n⚠️ واتساپ رو باز کن ← سه نقطه ← Linked Devices ← Link a Device\n');
 });
 
+client.on('disconnected', (reason) => {
+  console.error('❌ واتساپ قطع شد (' + reason + ') - در حال ری‌استارت کامل...');
+  process.exit(1);
+});
+
 client.on('ready', async () => {
   console.log('✅ ربات واتساپ آماده‌ست!');
 
@@ -86,6 +91,16 @@ client.on('ready', async () => {
   // شروع رصد فایل موجودی برای پست فوری خودکار
   startWatchingCars();
   startWatchingTelegramTrigger();
+
+  setInterval(async () => {
+    try {
+      const state = await client.getState();
+      if (!state) throw new Error('no state');
+    } catch (e) {
+      console.error('❌ سلامت اتصال واتساپ مشکل داره، در حال ری‌استارت کامل...', e.message);
+      process.exit(1);
+    }
+  }, 5 * 60 * 1000);
 });
 
 client.on('message_create', async (msg) => {
